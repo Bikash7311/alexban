@@ -2,7 +2,6 @@ import sys
 import asyncio
 
 # --- FIX FOR PYTHON 3.12 / 3.14 EVENT LOOP ISSUE ---
-# MUST BE SET BEFORE IMPORTING OR INITIALIZING HYDROGRAM CLIENT
 try:
     loop = asyncio.get_event_loop()
 except RuntimeError:
@@ -30,8 +29,8 @@ BOT_USERNAME = "alexbanxunbanbot"
 
 MANDATORY_CHANNEL = "alexbanxunban"
 MANDATORY_GROUP_LINK = "https://t.me/banproofsgc"
-REQ_CHANNEL_LINK = "https://t.me/alexbanxunban"
 
+# UPDATED DIRECT MP4 VIDEO URL
 HEADER_VIDEO = "https://videotourl.com/videos/1791279853845-6cb60d69-8304-468c-a625-46219c88d2b3.mp4"
 
 # --- 2. DUMMY FLASK SERVER FOR RENDER ---
@@ -45,7 +44,7 @@ def run_web_server():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
-# --- 3. APPROVED REQUEST USERS FILE SYSTEM ---
+# --- 3. PERSISTENT STORAGE SYSTEM ---
 REQ_FILE = "approved_users.json"
 
 def load_approved_users():
@@ -53,8 +52,7 @@ def load_approved_users():
         try:
             with open(REQ_FILE, "r") as f:
                 return set(json.load(f))
-        except Exception as e:
-            print(f"Error loading approved users: {e}")
+        except Exception:
             return set()
     return set()
 
@@ -73,7 +71,6 @@ cooldowns = {}
 user_states = {}
 COOLDOWN_TIME = 300
 
-# INITIALIZE CLIENT (NOW SAFE UNDER PRE-SET EVENT LOOP)
 app = Client("AlexBanUnbanBotSession", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # --- 4. JOIN REQUEST EVENT HANDLER ---
@@ -81,7 +78,6 @@ app = Client("AlexBanUnbanBotSession", api_id=API_ID, api_hash=API_HASH, bot_tok
 async def track_join_requests(client, chat_join_request: ChatJoinRequest):
     user_id = chat_join_request.from_user.id
     save_approved_user(user_id)
-    print(f"✅ [JOIN REQUEST APPROVED] User ID: {user_id}")
 
 # --- 5. HELPER FUNCTIONS ---
 def render_progress_bar(percent: int, length: int = 12) -> str:
@@ -143,7 +139,7 @@ def get_main_menu(user_id):
         "🔥 <i>The Most Powerful Multi-Tasking Telegram Shield Engine</i>\n\n"
         "<code>┌───────────────────────────────┐\n"
         f"│ 👤 User ID   : {user_id:<14} │\n"
-        f"│ 🛡️ Rank      : {status_str:<14} │\n"
+        f"│ 🛡️️ Rank      : {status_str:<14} │\n"
         f"│ 🔮 Referrals : {str(user_data['referrals'])+'/10':<14} │\n"
         "└───────────────────────────────┘</code>\n\n"
         "🚀 <b>Choose your target module from below:</b>"
@@ -231,12 +227,9 @@ async def start_cmd(client, message):
     user_id = message.from_user.id
     user_states.pop(user_id, None)
     
-    if not await check_force_join(client, user_id):
-        text, buttons = get_force_join_menu()
-        await message.reply_text(text, reply_markup=buttons)
-        return
-
-    if user_id not in users_db:
+    # Track Referral Logic
+    is_new_user = user_id not in users_db
+    if is_new_user:
         users_db[user_id] = {'referrals': 0, 'is_premium': False}
         if len(message.command) > 1:
             try:
@@ -245,14 +238,20 @@ async def start_cmd(client, message):
                     users_db[ref_by]['referrals'] += 1
                     if users_db[ref_by]['referrals'] >= 10:
                         users_db[ref_by]['is_premium'] = True
+                    try:
+                        await client.send_message(
+                            ref_by, 
+                            f"🎉 <b>New Referral Joined!</b>\nTotal Referrals: <code>{users_db[ref_by]['referrals']}/10</code>"
+                        )
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
-    msg = await message.reply("⚡ <i>Loading Alex Core Engines...</i>")
-    await asyncio.sleep(0.3)
-    await msg.edit("🔥 <i>Bypassing Security Firewalls...</i>")
-    await asyncio.sleep(0.3)
-    await msg.delete()
+    if not await check_force_join(client, user_id):
+        text, buttons = get_force_join_menu()
+        await message.reply_text(text, reply_markup=buttons)
+        return
 
     caption, buttons = get_main_menu(user_id)
     try:
@@ -305,7 +304,8 @@ async def cb_handler(client, query):
             await query.answer("✅ Verification Completed! Access Granted.", show_alert=True)
             caption, buttons = get_main_menu(user_id)
             try:
-                await query.message.edit_caption(caption=caption, reply_markup=buttons)
+                await query.message.reply_video(video=HEADER_VIDEO, caption=caption, reply_markup=buttons)
+                await query.message.delete()
             except Exception:
                 await query.message.edit_text(text=caption, reply_markup=buttons)
         else:
