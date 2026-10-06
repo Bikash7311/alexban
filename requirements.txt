@@ -1,3 +1,2 @@
 hydrogram
 flask
-tgcrypto
