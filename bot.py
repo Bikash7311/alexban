@@ -1,5 +1,14 @@
 import sys
 import asyncio
+
+# --- FIX FOR PYTHON 3.12 / 3.14 EVENT LOOP ISSUE ---
+# MUST BE SET BEFORE IMPORTING OR INITIALIZING HYDROGRAM CLIENT
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 import json
 import os
 import time
@@ -64,7 +73,7 @@ cooldowns = {}
 user_states = {}
 COOLDOWN_TIME = 300
 
-# INITIALIZE CLIENT
+# INITIALIZE CLIENT (NOW SAFE UNDER PRE-SET EVENT LOOP)
 app = Client("AlexBanUnbanBotSession", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # --- 4. JOIN REQUEST EVENT HANDLER ---
@@ -377,7 +386,7 @@ async def cb_handler(client, query):
         except Exception:
             await query.message.edit_text(text=ask_text, reply_markup=buttons)
 
-# --- 8. RUNNER WITH FLASK BINDING FIRST ---
+# --- 8. APPLICATION RUNNER ---
 if __name__ == "__main__":
     print("🚀 Web Server Starting for Render...")
     server_thread = threading.Thread(target=run_web_server)
@@ -385,11 +394,4 @@ if __name__ == "__main__":
     server_thread.start()
 
     print("⚡ ALEX BAN X UNBAN BOT STARTING...")
-    
-    # Python 3.12/3.14 Event Loop Fix
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    loop.run_until_complete(app.start())
-    print("✅ Bot session started successfully!")
-    loop.run_forever()
+    app.run()
