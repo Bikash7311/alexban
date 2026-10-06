@@ -21,7 +21,7 @@ from hydrogram.errors import UserNotParticipant
 # --- 1. CONFIGURATION ---
 API_ID = 33772941  
 API_HASH = "3b6ab6b1940c87915439bb41e4e80ea8"  
-BOT_TOKEN = "8844875546:AAHJmca5Y5WvoisObgCldpF3Qz80tKpk0XY"
+BOT_TOKEN = "8844875546:AAHJmca5Y5WvoisObgCldpF3Qz80tKpk0X"
 
 OWNER_ID = 8640890230
 OWNER_USERNAME = "Alex761kh"
