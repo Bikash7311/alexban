@@ -1,5 +1,13 @@
 import sys
 import asyncio
+
+# --- FIX FOR PYTHON 3.10+ / 3.14 EVENT LOOP ISSUE ---
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 import json
 import os
 import time
@@ -28,7 +36,7 @@ HEADER_VIDEO = "https://videotourl.com/videos/1791279853845-6cb60d69-8304-468c-a
 # CLIENT INITIALIZATION
 app = Client("AlexBanUnbanBotSession", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# --- 2. DUMMY FLASK SERVER (RENDER PORT BINDING FIX) ---
+# --- 2. DUMMY FLASK SERVER FOR RENDER ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -65,7 +73,7 @@ def save_approved_user(user_id):
 users_db = {}
 cooldowns = {}
 user_states = {}
-COOLDOWN_TIME = 300  # 5 Minutes Cooldown
+COOLDOWN_TIME = 300
 
 # --- 4. JOIN REQUEST EVENT HANDLER ---
 @app.on_chat_join_request()
@@ -84,7 +92,6 @@ async def check_force_join(client, user_id):
     if user_id == OWNER_ID:
         return True
     
-    # 1. Check Mandatory Channel Membership
     try:
         await client.get_chat_member(MANDATORY_CHANNEL, user_id)
     except UserNotParticipant:
@@ -92,11 +99,9 @@ async def check_force_join(client, user_id):
     except Exception:
         pass
 
-    # 2. Check if user sent a join request earlier
     if user_id in approved_req_users:
         return True
 
-    # 3. Fallback Check: Direct membership in discussion group
     try:
         chat_member = await client.get_chat_member("banproofsgc", user_id)
         if chat_member:
@@ -133,7 +138,7 @@ def get_main_menu(user_id):
         status_str = "🪙 𝑭𝑹𝑬𝑬 𝑼𝑺𝑬𝑹"
 
     caption = (
-        "⚡ <b><u>𝑨𝑳𝑬𝑑 𝑩𝑨𝑵 𝑑 𝑼𝑵𝑩𝑨𝑵 𝑩𝑶𝑻 𝑽2.0</u></b> ⚡\n\n"
+        "⚡ <b><u>𝑨𝑳𝑬𝑿 𝑩𝑨𝑵 𝑿 𝑼𝑵𝑩𝑨𝑵 𝑩𝑶𝑻 𝑽2.0</u></b> ⚡\n\n"
         "🔥 <i>The Most Powerful Multi-Tasking Telegram Shield Engine</i>\n\n"
         "<code>┌───────────────────────────────┐\n"
         f"│ 👤 User ID   : {user_id:<14} │\n"
@@ -248,144 +253,4 @@ async def start_cmd(client, message):
     await asyncio.sleep(0.3)
     await msg.delete()
 
-    caption, buttons = get_main_menu(user_id)
-    try:
-        await message.reply_video(video=HEADER_VIDEO, caption=caption, reply_markup=buttons)
-    except Exception:
-        await message.reply_text(text=caption, reply_markup=buttons)
-
-@app.on_message(filters.text & ~filters.command(["start", "stats", "addpremium", "rempremium", "broadcast"]))
-async def handle_input(client, message):
-    user_id = message.from_user.id
-    
-    if user_id in user_states:
-        action_type = user_states.pop(user_id)
-        target = message.text.strip()
-        
-        msg = await message.reply("⏳ <b>Processing Task across Nodes...</b>")
-        
-        for pct in [25, 50, 75, 100]:
-            await asyncio.sleep(0.6)
-            bar = render_progress_bar(pct)
-            
-            table_text = (
-                "⚡ <b>ALEX ENGINE LIVE MONITOR</b>\n\n"
-                "<code>┌───────────────────────────────┐\n"
-                f"│ Target  : {target[:12]:<17} │\n"
-                f"│ Module  : {action_type:<17} │\n"
-                f"│ Status  : {bar:<17} │\n"
-                "└───────────────────────────────┘</code>"
-            )
-            await msg.edit_text(table_text)
-
-        final_output = (
-            "✅ <b><u>ACTION EXECUTED SUCCESSFULLY</u></b>\n\n"
-            "📜 <i>Execution Log Overview:</i>\n\n"
-            f"<blockquote>🎯 <b>Target:</b> {target}\n"
-            f"⚙️ <b>Module Loaded:</b> {action_type}\n"
-            "🔥 <b>Result:</b> Routine finished with 0 fatal errors.</blockquote>"
-        )
-        back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Return to Main Dashboard", callback_data="back_to_menu")]])
-        await msg.edit_text(final_output, reply_markup=back_btn)
-
-# --- 7. CALLBACK QUERY HANDLER ---
-@app.on_callback_query()
-async def cb_handler(client, query):
-    user_id = query.from_user.id
-    data = query.data
-    
-    if data == "check_join_status":
-        if await check_force_join(client, user_id):
-            await query.answer("✅ Verification Completed! Access Granted.", show_alert=True)
-            caption, buttons = get_main_menu(user_id)
-            try:
-                await query.message.edit_caption(caption=caption, reply_markup=buttons)
-            except Exception:
-                await query.message.edit_text(text=caption, reply_markup=buttons)
-        else:
-            await query.answer("❌ Channels join karke verify button dabayein!", show_alert=True)
-        return
-
-    if data == "back_to_menu":
-        user_states.pop(user_id, None)
-        caption, buttons = get_main_menu(user_id)
-        try:
-            await query.message.edit_caption(caption=caption, reply_markup=buttons)
-        except Exception:
-            await query.message.edit_text(text=caption, reply_markup=buttons)
-        return
-
-    if data == "invite":
-        ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
-        user_data = users_db.get(user_id, {'referrals': 0})
-        invite_text = (
-            "🚀 <b><u>REFERRAL SYSTEM & VIP ACCESS</u></b>\n\n"
-            "💎 <i>Invite 10 Friends to instantly unlock VIP Premium Features for free!</i>\n\n"
-            f"📊 <b>Your Invites:</b> <code>{user_data['referrals']}/10</code>\n"
-            f"🔗 <b>Your Exclusive Link:</b>\n<code>{ref_link}</code>"
-        )
-        buttons = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📤 Share Referral Link", url=f"https://t.me/share/url?url={ref_link}&text=Try%20Alex%20Ban%20Unban%20Bot!")],
-            [InlineKeyboardButton("👑 Owner Support", url=f"https://t.me/{OWNER_USERNAME}")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")]
-        ])
-        try:
-            await query.message.edit_caption(caption=invite_text, reply_markup=buttons)
-        except Exception:
-            await query.message.edit_text(text=invite_text, reply_markup=buttons)
-        return
-
-    if data in ["ban_perm", "ban_temp", "mass_report", "unban", "status", "bot_status"]:
-        user_data = users_db.get(user_id, {'referrals': 0, 'is_premium': False})
-        
-        if user_id != OWNER_ID and not user_data['is_premium']:
-            ref_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
-            restricted_text = (
-                "🔒 <b><u>PREMIUM FEATURE LOCKED</u></b> 🔒\n\n"
-                "⚠️ <i>Aap abhi Free Tier par hain! Is feature ke liye VIP Premium status zaroori hai.</i>\n\n"
-                f"📊 <b>Your Referrals:</b> <code>{user_data['referrals']}/10</code>\n\n"
-                "🎯 <b><u>HOW TO UNLOCK?</u></b>\n"
-                f"1️⃣ Invite 10 Friends using: <code>{ref_link}</code>\n"
-                f"2️⃣ Direct Buy by contacting Owner."
-            )
-            restricted_buttons = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📤 Share Referral Link", url=f"https://t.me/share/url?url={ref_link}&text=Join%20Alex%20Ban%20Bot")],
-                [InlineKeyboardButton("👑 Buy Premium Access", url=f"https://t.me/{OWNER_USERNAME}")],
-                [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")]
-            ])
-            try:
-                await query.message.edit_caption(caption=restricted_text, reply_markup=restricted_buttons)
-            except Exception:
-                await query.message.edit_text(text=restricted_text, reply_markup=restricted_buttons)
-            return
-
-        current_time = time.time()
-        last_time = cooldowns.get(user_id, 0)
-        if current_time - last_time < COOLDOWN_TIME:
-            remaining = int(COOLDOWN_TIME - (current_time - last_time))
-            mins, secs = divmod(remaining, 60)
-            await query.answer(f"⏳ Cooldown Active! Please wait {mins}m {secs}s.", show_alert=True)
-            return
-
-        cooldowns[user_id] = current_time
-        user_states[user_id] = data
-        
-        ask_text = (
-            "🎯 <b><u>ENTER TARGET INFORMATION</u></b>\n\n"
-            "✍️ <i>Target ka Username ya ID send karein:</i>"
-        )
-        buttons = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Cancel Action", callback_data="back_to_menu")]])
-        try:
-            await query.message.edit_caption(caption=ask_text, reply_markup=buttons)
-        except Exception:
-            await query.message.edit_text(text=ask_text, reply_markup=buttons)
-
-# --- 8. BOT EXECUTION ---
-if __name__ == "__main__":
-    print("🚀 Web Server Starting for Render Binding...")
-    server_thread = threading.Thread(target=run_web_server)
-    server_thread.daemon = True
-    server_thread.start()
-
-    print("⚡ ALEX BAN X UNBAN BOT ONLINE...")
-    app.run()
+    caption, buttons = get_main_menu(user_
